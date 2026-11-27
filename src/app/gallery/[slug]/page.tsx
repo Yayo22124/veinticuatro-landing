@@ -1,5 +1,3 @@
-import { existsSync } from "node:fs";
-import path from "node:path";
 import Box from "@mui/material/Box";
 import type { Metadata } from "next";
 import { headers } from "next/headers";
@@ -19,22 +17,32 @@ interface GalleryPageProps {
   searchParams: Promise<{ tab?: string }>;
 }
 
-function findPublicCoverPath(slug: string): string | null {
+async function resolvePublicCoverUrl(
+  slug: string,
+  origin?: string,
+): Promise<string | undefined> {
   const parsedSlug = slugSchema.safeParse(slug);
-  if (!parsedSlug.success) {
-    return null;
+  if (!parsedSlug.success || !origin) {
+    return undefined;
   }
 
-  const extensions = ["webp", "jpg", "jpeg", "png"];
+  const extensions = ["jpg", "webp", "jpeg", "png"];
   for (const ext of extensions) {
-    const fileName = `${parsedSlug.data}.${ext}`;
-    const diskPath = path.join(process.cwd(), "public", "covers", fileName);
-    if (existsSync(diskPath)) {
-      return `/covers/${fileName}`;
+    const candidateUrl = `${origin}/covers/${parsedSlug.data}.${ext}`;
+    try {
+      const res = await fetch(candidateUrl, {
+        method: "HEAD",
+        cache: "force-cache",
+      });
+      if (res.ok) {
+        return candidateUrl;
+      }
+    } catch {
+      // Continuar con la siguiente extensión si falla
     }
   }
 
-  return null;
+  return undefined;
 }
 
 export async function generateMetadata({
@@ -47,12 +55,7 @@ export async function generateMetadata({
   const origin = host ? `${protocol}://${host}` : undefined;
   const title = `${formatGalleryTitle(slug)} — ${esMessages["home.brand"]}`;
   const description = esMessages["app.description"];
-  const publicCoverPath = findPublicCoverPath(slug);
-  const ogImageUrl = publicCoverPath
-    ? origin
-      ? `${origin}${publicCoverPath}`
-      : publicCoverPath
-    : undefined;
+  const ogImageUrl = await resolvePublicCoverUrl(slug, origin);
 
   return {
     title,
@@ -66,15 +69,15 @@ export async function generateMetadata({
       siteName: esMessages["home.brand"],
       ...(ogImageUrl
         ? {
-            images: [
-              {
-                url: ogImageUrl,
-                width: 1200,
-                height: 630,
-                alt: title,
-              },
-            ],
-          }
+          images: [
+            {
+              url: ogImageUrl,
+              width: 1200,
+              height: 630,
+              alt: title,
+            },
+          ],
+        }
         : {}),
     },
     twitter: {
