@@ -3,7 +3,8 @@ import { Inter } from "next/font/google";
 import type { ReactNode } from "react";
 import { I18nProvider } from "@/components/I18nProvider";
 import { ThemeRegistry } from "@/components/ThemeRegistry";
-import { getRequestLocale, getServerIntl } from "@/i18n/server";
+import { esMessages } from "@/i18n/messages/es";
+import { getRequestLocale } from "@/i18n/server";
 
 const inter = Inter({
   subsets: ["latin"],
@@ -11,18 +12,14 @@ const inter = Inter({
   variable: "--font-sans",
 });
 
-export async function generateMetadata(): Promise<Metadata> {
-  const intl = await getServerIntl();
-
-  return {
-    title: intl.formatMessage({ id: "app.title" }),
-    description: intl.formatMessage({ id: "app.description" }),
-    robots: {
-      index: false,
-      follow: false,
-    },
-  };
-}
+export const metadata: Metadata = {
+  title: esMessages["app.title"],
+  description: esMessages["app.description"],
+  robots: {
+    index: false,
+    follow: false,
+  },
+};
 
 export default async function RootLayout({
   children,
