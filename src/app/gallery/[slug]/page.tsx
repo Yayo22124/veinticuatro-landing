@@ -1,34 +1,100 @@
-import type { Metadata } from "next";
+import { existsSync } from "node:fs";
+import path from "node:path";
 import Box from "@mui/material/Box";
-import Button from "@mui/material/Button";
-import Container from "@mui/material/Container";
-import Paper from "@mui/material/Paper";
-import Stack from "@mui/material/Stack";
-import Typography from "@mui/material/Typography";
+import type { Metadata } from "next";
+import { headers } from "next/headers";
 import { notFound } from "next/navigation";
-import { logoutGalleryAction } from "@/app/gallery/[slug]/actions";
 import { GalleryPinGate } from "@/components/GalleryPinGate";
-import { LanguageSwitcher } from "@/components/LanguageSwitcher";
+import { StudioFooter } from "@/components/StudioFooter";
+import { GalleryHero } from "@/components/gallery/GalleryHero";
+import { GalleryView } from "@/components/gallery/GalleryView";
 import { esMessages } from "@/i18n/messages/es";
-import { getServerIntl } from "@/i18n/server";
 import { galleryExists, isGalleryAuthenticated } from "@/lib/auth";
-import { getGalleryContents } from "@/lib/r2-service";
-
-export const metadata: Metadata = {
-  title: `${esMessages["auth.title"]} — ${esMessages["home.brand"]}`,
-  description: esMessages["app.description"],
-  robots: {
-    index: false,
-    follow: false,
-  },
-};
+import { formatGalleryTitle } from "@/lib/format";
+import { getGalleryContents, type GalleryTab } from "@/lib/r2-service";
+import { slugSchema } from "@/lib/validation";
 
 interface GalleryPageProps {
   params: Promise<{ slug: string }>;
+  searchParams: Promise<{ tab?: string }>;
 }
 
-export default async function GalleryPage({ params }: GalleryPageProps) {
+function findPublicCoverPath(slug: string): string | null {
+  const parsedSlug = slugSchema.safeParse(slug);
+  if (!parsedSlug.success) {
+    return null;
+  }
+
+  const extensions = ["webp", "jpg", "jpeg", "png"];
+  for (const ext of extensions) {
+    const fileName = `${parsedSlug.data}.${ext}`;
+    const diskPath = path.join(process.cwd(), "public", "covers", fileName);
+    if (existsSync(diskPath)) {
+      return `/covers/${fileName}`;
+    }
+  }
+
+  return null;
+}
+
+export async function generateMetadata({
+  params,
+}: GalleryPageProps): Promise<Metadata> {
   const { slug } = await params;
+  const headerStore = await headers();
+  const host = headerStore.get("x-forwarded-host") ?? headerStore.get("host");
+  const protocol = headerStore.get("x-forwarded-proto") ?? "https";
+  const origin = host ? `${protocol}://${host}` : undefined;
+  const title = `${formatGalleryTitle(slug)} — ${esMessages["home.brand"]}`;
+  const description = esMessages["app.description"];
+  const publicCoverPath = findPublicCoverPath(slug);
+  const ogImageUrl = publicCoverPath
+    ? origin
+      ? `${origin}${publicCoverPath}`
+      : publicCoverPath
+    : undefined;
+
+  return {
+    title,
+    description,
+    metadataBase: origin ? new URL(origin) : undefined,
+    openGraph: {
+      title,
+      description,
+      type: "website",
+      locale: "es_MX",
+      siteName: esMessages["home.brand"],
+      ...(ogImageUrl
+        ? {
+            images: [
+              {
+                url: ogImageUrl,
+                width: 1200,
+                height: 630,
+                alt: title,
+              },
+            ],
+          }
+        : {}),
+    },
+    twitter: {
+      card: "summary_large_image",
+      title,
+      description,
+      ...(ogImageUrl ? { images: [ogImageUrl] } : {}),
+    },
+    robots: {
+      index: false,
+      follow: false,
+    },
+  };
+}
+
+export default async function GalleryPage({
+  params,
+  searchParams,
+}: GalleryPageProps) {
+  const [{ slug }, { tab }] = await Promise.all([params, searchParams]);
 
   if (!galleryExists(slug)) {
     notFound();
@@ -40,72 +106,21 @@ export default async function GalleryPage({ params }: GalleryPageProps) {
     return <GalleryPinGate slug={slug} />;
   }
 
-  const [intl, contents] = await Promise.all([
-    getServerIntl(),
-    getGalleryContents(slug),
-  ]);
-
-  const logoutAction = logoutGalleryAction.bind(null, slug);
+  const activeTab: GalleryTab = tab === "videos" ? "videos" : "photos";
+  const contents = await getGalleryContents(slug, activeTab);
 
   return (
-    <Box component="main" sx={{ minHeight: "100dvh", py: 6, px: 2 }}>
-      <Container maxWidth="md">
-        <Stack
-          direction="row"
-          sx={{
-            justifyContent: "space-between",
-            alignItems: "center",
-            mb: 4,
-          }}
-        >
-          <Box>
-            <Typography
-              variant="overline"
-              color="text.secondary"
-              sx={{ letterSpacing: "0.24em", display: "block" }}
-            >
-              {intl.formatMessage({ id: "home.brand" })}
-            </Typography>
-            <Typography variant="h4" component="h1">
-              {contents.slug}
-            </Typography>
-          </Box>
-
-          <Stack direction="row" spacing={1.5} sx={{ alignItems: "center" }}>
-            <LanguageSwitcher />
-            <Box component="form" action={logoutAction}>
-              <Button type="submit" variant="outlined" size="small">
-                {intl.formatMessage({ id: "gallery.logout" })}
-              </Button>
-            </Box>
-          </Stack>
-        </Stack>
-
-        <Paper sx={{ p: 4 }}>
-          <Stack spacing={1}>
-            <Typography variant="body1">
-              {intl.formatMessage(
-                { id: "gallery.photosCount" },
-                { count: contents.photos.length },
-              )}
-            </Typography>
-            <Typography variant="body1">
-              {intl.formatMessage(
-                { id: "gallery.videosCount" },
-                { count: contents.videos.length },
-              )}
-            </Typography>
-            <Typography variant="body2" color="text.secondary">
-              {contents.zipPackage
-                ? intl.formatMessage(
-                    { id: "gallery.packageAvailable" },
-                    { fileName: contents.zipPackage.fileName },
-                  )
-                : intl.formatMessage({ id: "gallery.packageUnavailable" })}
-            </Typography>
-          </Stack>
-        </Paper>
-      </Container>
+    <Box
+      sx={{
+        minHeight: "100dvh",
+        display: "flex",
+        flexDirection: "column",
+        backgroundColor: "background.default",
+      }}
+    >
+      <GalleryHero slug={contents.slug} covers={contents.covers} />
+      <GalleryView contents={contents} />
+      <StudioFooter />
     </Box>
   );
 }

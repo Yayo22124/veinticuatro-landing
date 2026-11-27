@@ -28,15 +28,11 @@ export type DownloadUrlActionResult =
       errorCode: "unauthorized" | "invalid_key" | "unexpected";
     };
 
-export async function verifyGalleryPinAction(
+export async function submitGalleryPinAction(
   slug: string,
-  _prevState: VerifyPinActionState,
-  formData: FormData,
+  pin: string,
 ): Promise<VerifyPinActionState> {
   try {
-    const rawPin = formData.get("pin");
-    const pin = typeof rawPin === "string" ? rawPin : "";
-
     const verified = await verifyGalleryPinAndSetSession(slug, pin);
     if (!verified) {
       return { ok: false, errorCode: "invalid_pin" };
@@ -51,6 +47,16 @@ export async function verifyGalleryPinAction(
   } catch {
     return { ok: false, errorCode: "unexpected" };
   }
+}
+
+export async function verifyGalleryPinAction(
+  slug: string,
+  _prevState: VerifyPinActionState,
+  formData: FormData,
+): Promise<VerifyPinActionState> {
+  const rawPin = formData.get("pin");
+  const pin = typeof rawPin === "string" ? rawPin : "";
+  return submitGalleryPinAction(slug, pin);
 }
 
 export async function requestDownloadUrlAction(

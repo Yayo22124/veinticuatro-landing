@@ -91,6 +91,12 @@ export function createStudioTheme(mode: ThemeMode = DEFAULT_THEME_MODE): Theme {
     components: {
       MuiCssBaseline: {
         styleOverrides: {
+          html: {
+            scrollBehavior: "smooth",
+            "@media (prefers-reduced-motion: reduce)": {
+              scrollBehavior: "auto",
+            },
+          },
           body: {
             backgroundColor: backgroundDefault,
             color: textPrimary,
