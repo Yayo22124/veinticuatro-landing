@@ -2,19 +2,29 @@ import Box from "@mui/material/Box";
 import Container from "@mui/material/Container";
 import Paper from "@mui/material/Paper";
 import Typography from "@mui/material/Typography";
+import { LanguageSwitcher } from "@/components/LanguageSwitcher";
+import { getServerIntl } from "@/i18n/server";
 
-export default function HomePage() {
+export default async function HomePage() {
+  const intl = await getServerIntl();
+
   return (
     <Box
       component="main"
       sx={{
         minHeight: "100dvh",
         display: "flex",
+        flexDirection: "column",
         alignItems: "center",
         justifyContent: "center",
+        position: "relative",
         px: 2,
       }}
     >
+      <Box sx={{ position: "absolute", top: 24, right: 24 }}>
+        <LanguageSwitcher />
+      </Box>
+
       <Container maxWidth="sm">
         <Paper
           sx={{
@@ -27,14 +37,13 @@ export default function HomePage() {
             color="text.secondary"
             sx={{ letterSpacing: "0.24em", display: "block", mb: 1.5 }}
           >
-            veinticuatro studio
+            {intl.formatMessage({ id: "home.brand" })}
           </Typography>
           <Typography variant="h4" component="h1" gutterBottom>
-            Private Delivery
+            {intl.formatMessage({ id: "home.title" })}
           </Typography>
           <Typography variant="body2" color="text.secondary">
-            Access your session using the private link and PIN provided by the
-            studio.
+            {intl.formatMessage({ id: "home.description" })}
           </Typography>
         </Paper>
       </Container>
