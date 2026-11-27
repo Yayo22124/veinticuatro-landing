@@ -12,6 +12,15 @@ export const pinSchema = z
   .trim()
   .regex(/^\d{4,12}$/);
 
+export const otpPinSchema = z
+  .string()
+  .trim()
+  .regex(/^\d{4}$/, "pin_incomplete");
+
+export const pinFormSchema = z.object({
+  pin: otpPinSchema,
+});
+
 export const r2KeySchema = z
   .string()
   .min(1)
