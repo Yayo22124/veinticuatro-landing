@@ -1,11 +1,14 @@
 "use client";
 
 import DownloadRoundedIcon from "@mui/icons-material/DownloadRounded";
+import PhotoCameraOutlinedIcon from "@mui/icons-material/PhotoCameraOutlined";
 import Box from "@mui/material/Box";
 import CircularProgress from "@mui/material/CircularProgress";
 import IconButton from "@mui/material/IconButton";
 import Skeleton from "@mui/material/Skeleton";
-import { useEffect, useRef, useState } from "react";
+import { useTheme } from "@mui/material/styles";
+import useMediaQuery from "@mui/material/useMediaQuery";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useIntl } from "react-intl";
 import type { GalleryPhoto } from "@/lib/r2-service";
 
@@ -16,9 +19,8 @@ interface GalleryPhotoGridProps {
   onDownloadPhoto: (key: string) => void;
 }
 
-const INITIAL_BATCH_SIZE = 15;
+const INITIAL_BATCH_SIZE = 20;
 const LOAD_MORE_BATCH_SIZE = 15;
-const SKELETON_HEIGHTS = [400, 400, 400, 400];
 
 interface PhotoTileProps {
   photo: GalleryPhoto;
@@ -26,6 +28,45 @@ interface PhotoTileProps {
   isDownloading: boolean;
   onOpen: (index: number) => void;
   onDownload: (key: string) => void;
+}
+
+function CameraSkeletonPlaceholder({ height }: { height?: number | string }) {
+  return (
+    <Box
+      sx={{
+        position: height ? "relative" : "absolute",
+        inset: height ? undefined : 0,
+        width: "100%",
+        height: height ?? "100%",
+        borderRadius: "2px",
+        overflow: "hidden",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        backgroundColor: "action.hover",
+      }}
+    >
+      <Skeleton
+        variant="rectangular"
+        animation="wave"
+        sx={{
+          position: "absolute",
+          inset: 0,
+          width: "100%",
+          height: "100%",
+        }}
+      />
+      <PhotoCameraOutlinedIcon
+        sx={{
+          position: "relative",
+          zIndex: 1,
+          fontSize: 28,
+          color: "text.disabled",
+          opacity: 0.45,
+        }}
+      />
+    </Box>
+  );
 }
 
 function PhotoTile({
@@ -50,13 +91,11 @@ function PhotoTile({
   return (
     <Box
       sx={{
-        breakInside: "avoid",
-        mb: "8px",
         position: "relative",
         borderRadius: "2px",
         overflow: "hidden",
         backgroundColor: "action.hover",
-        minHeight: loaded ? "auto" : 220,
+        minHeight: loaded ? "auto" : 260,
         "&:hover .photo-overlay, &:focus-within .photo-overlay": {
           opacity: 1,
         },
@@ -70,18 +109,7 @@ function PhotoTile({
         },
       }}
     >
-      {!loaded && (
-        <Skeleton
-          variant="rectangular"
-          animation="wave"
-          sx={{
-            position: "absolute",
-            inset: 0,
-            width: "100%",
-            height: "100%",
-          }}
-        />
-      )}
+      {!loaded && <CameraSkeletonPlaceholder />}
 
       <Box
         component="button"
@@ -179,6 +207,13 @@ export function GalleryPhotoGrid({
   onDownloadPhoto,
 }: GalleryPhotoGridProps) {
   const intl = useIntl();
+  const theme = useTheme();
+  const isXl = useMediaQuery(theme.breakpoints.up("xl"));
+  const isMd = useMediaQuery(theme.breakpoints.up("md"));
+  const isSm = useMediaQuery(theme.breakpoints.up("sm"));
+
+  const columnCount = isXl ? 5 : isMd ? 4 : isSm ? 3 : 2;
+
   const sentinelRef = useRef<HTMLDivElement | null>(null);
   const isFetchingRef = useRef(false);
   const [visibleCount, setVisibleCount] = useState(INITIAL_BATCH_SIZE);
@@ -208,7 +243,7 @@ export function GalleryPhotoGrid({
           Math.min(prev + LOAD_MORE_BATCH_SIZE, photos.length),
         );
       },
-      { rootMargin: "400px 0px" },
+      { rootMargin: "150px 0px" },
     );
 
     observer.observe(sentinel);
@@ -218,60 +253,73 @@ export function GalleryPhotoGrid({
     };
   }, [hasMore, photos.length, effectiveVisibleCount]);
 
+  const columns = useMemo(() => {
+    const cols: Array<Array<{ photo: GalleryPhoto; originalIndex: number }>> =
+      Array.from({ length: columnCount }, () => []);
+
+    const slice = photos.slice(0, effectiveVisibleCount);
+    slice.forEach((photo, idx) => {
+      cols[idx % columnCount].push({ photo, originalIndex: idx });
+    });
+
+    return cols;
+  }, [photos, effectiveVisibleCount, columnCount]);
+
   if (photos.length === 0) {
     return null;
   }
-
-  const visiblePhotos = photos.slice(0, effectiveVisibleCount);
 
   return (
     <Box component="section">
       <Box
         sx={{
-          columnCount: { xs: 2, sm: 3, md: 4, xl: 5 },
-          columnGap: "8px",
+          display: "flex",
+          alignItems: "flex-start",
+          gap: "8px",
         }}
       >
-        {visiblePhotos.map((photo, index) => (
-          <PhotoTile
-            key={photo.id}
-            photo={photo}
-            index={index}
-            isDownloading={
-              photo.originalKey !== null &&
-              downloadingKey === photo.originalKey
-            }
-            onOpen={onOpenPhoto}
-            onDownload={onDownloadPhoto}
-          />
+        {columns.map((col, colIdx) => (
+          <Box
+            key={colIdx}
+            sx={{
+              flex: 1,
+              minWidth: 0,
+              display: "flex",
+              flexDirection: "column",
+              gap: "8px",
+            }}
+          >
+            {col.map(({ photo, originalIndex }) => (
+              <PhotoTile
+                key={photo.id}
+                photo={photo}
+                index={originalIndex}
+                isDownloading={
+                  photo.originalKey !== null &&
+                  downloadingKey === photo.originalKey
+                }
+                onOpen={onOpenPhoto}
+                onDownload={onDownloadPhoto}
+              />
+            ))}
+          </Box>
         ))}
       </Box>
 
       {hasMore && (
-        <Box ref={sentinelRef} sx={{ mt: 1 }}>
-          <Box
-            aria-label={intl.formatMessage({ id: "gallery.loadingMore" })}
-            sx={{
-              display: "grid",
-              gridTemplateColumns: {
-                xs: "repeat(2, 1fr)",
-                sm: "repeat(3, 1fr)",
-                md: "repeat(4, 1fr)",
-                xl: "repeat(5, 1fr)",
-              },
-              gap: "8px",
-            }}
-          >
-            {SKELETON_HEIGHTS.map((height, idx) => (
-              <Skeleton
-                key={idx}
-                variant="rectangular"
-                animation="wave"
-                height={height}
-                sx={{ borderRadius: "2px" }}
-              />
-            ))}
-          </Box>
+        <Box
+          ref={sentinelRef}
+          aria-label={intl.formatMessage({ id: "gallery.loadingMore" })}
+          sx={{
+            mt: "8px",
+            display: "grid",
+            gridTemplateColumns: `repeat(${columnCount}, minmax(0, 1fr))`,
+            gap: "8px",
+          }}
+        >
+          {Array.from({ length: columnCount }).map((_, idx) => (
+            <CameraSkeletonPlaceholder key={idx} height={260} />
+          ))}
         </Box>
       )}
     </Box>
