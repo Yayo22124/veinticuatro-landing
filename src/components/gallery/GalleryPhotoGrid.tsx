@@ -259,12 +259,11 @@ export function GalleryPhotoGrid({
 
     const slice = photos.slice(0, effectiveVisibleCount);
     slice.forEach((photo, idx) => {
-      cols[idx % columnCount].push({ photo, originalIndex: idx });
+      cols[idx % columnCount]?.push({ photo, originalIndex: idx });
     });
 
     return cols;
   }, [photos, effectiveVisibleCount, columnCount]);
-
   if (photos.length === 0) {
     return null;
   }
